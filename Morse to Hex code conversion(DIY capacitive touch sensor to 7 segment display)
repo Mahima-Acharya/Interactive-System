@@ -1,0 +1,452 @@
+#include <CapacitiveSensor.h>
+#define a 12
+#define b 6
+#define c 7
+#define d 8
+#define e 9
+#define f 10
+#define g 11
+
+bool Button_Pressed_Flag;
+unsigned long Press_Duration;
+unsigned long Begin_Time;
+unsigned long Last_Press_Time;
+bool Charcter_Flag;
+bool New_Word_Flag;
+String Morse_Code = "";
+bool Sensor1, Sensor2;
+int angle[20];
+int j= 0;
+int words[100][2];
+
+CapacitiveSensor Touch_Sensor1 = CapacitiveSensor(4, 2);            // 22K ohm resistor between pins D2 & D4, pin D2 is sensor pin, add wire, foil
+CapacitiveSensor Touch_Sensor2 = CapacitiveSensor(4, 5);            // 22K ohm resistor between pins D2 & D1, pin D1 is sensor pin, add wire, foil
+
+
+void setup() 
+{
+  pinMode(a, OUTPUT);
+  pinMode(b, OUTPUT);
+  pinMode(c, OUTPUT);
+  pinMode(d, OUTPUT);
+  pinMode(e, OUTPUT);
+  pinMode(f, OUTPUT);
+  pinMode(g, OUTPUT);
+  
+  Serial.begin(9600);
+  Touch_Sensor1.set_CS_AutocaL_Millis(0xFFFFFFFF);                  //turn off autocalibrate on channel 1 
+  delay(10);      
+}
+
+void loop()
+{
+    Check_Button_State();                                                         // to check the pressed state of button 
+    
+    if( millis() - Last_Press_Time > 2000 && New_Word_Flag == true )             // execute the word pressed after 2000 ms
+    {
+        print_display(angle);
+        Serial.println();
+        Serial.println("New word");
+        delay(100);
+        for (int t=0; t<20;t++) angle[t] = 0;
+        j=0; 
+        New_Word_Flag = false;
+        Morse_Code = "";
+    }
+    
+    else if( millis() - Last_Press_Time > 750 && Charcter_Flag == true)         // execute the corresponding letter pressed within 750 ms.
+    {
+        DecodeMorse_Code(Morse_Code);
+        Charcter_Flag = false;
+        Morse_Code ="";
+        Serial.println();
+    }
+    
+}
+
+
+bool Sensor_Read1()                                                              // read the capacitive sensor value of first sensor
+{
+  long Touch_Value1 = Touch_Sensor1.capacitiveSensor(30);
+  
+  
+    if (Touch_Value1 > 30)
+    {
+      //Serial.println(". sensor");
+     return HIGH;
+    }
+    else return LOW;
+  
+}
+
+bool Sensor_Read2()                                                               // read the capacitive sensor value of second sensor
+{
+  long Touch_Value2 = Touch_Sensor2.capacitiveSensor(30);
+  
+  
+    if (Touch_Value2 > 30)
+      {
+      //Serial.println("- sensor");
+     return HIGH;
+    }
+     
+    else return LOW;
+  
+}
+
+
+void Check_Button_State()                 // to check the pressed state of  two capacitive sensors
+{
+  
+   if( ! Button_Pressed_Flag && (Sensor_Read1()== HIGH|| Sensor_Read2() == HIGH ) )
+   {
+    
+    Sensor1 = false;
+      Sensor2 = false;
+    //if(Sensor_Read1() && Sensor_Read2());
+      
+     
+     {
+      
+      if(Sensor_Read1())
+      {
+        
+        Sensor1 = true;
+        delay(100);
+        Sensor2 = false;
+      }
+       else if(Sensor_Read2())
+        {
+        Sensor2 = true;
+        delay(100);
+        Sensor1 = false;
+      }
+        Button_Pressed_Flag = true;
+        // start timer
+        Begin_Time = millis();
+        Last_Press_Time = Begin_Time;
+        Press_Duration = 0;
+        Charcter_Flag = true;
+        New_Word_Flag = true;
+      }
+   }
+   
+   if( Button_Pressed_Flag && Sensor_Read1()== LOW && Sensor_Read2()== LOW ) 
+   { 
+      
+      Button_Released();
+      Button_Pressed_Flag = false;
+      Last_Press_Time = millis();
+      Sensor1 = false;
+      Sensor2 = false;
+   }
+}
+
+
+
+void Button_Released()                                                        //this function returns "." or "-" based on the duration of button pressed
+{
+     if (Sensor1 == true)
+     { 
+              Morse_Code += '.';
+              Serial.print(". ");
+        }
+      else if (Sensor2 == true)
+     { 
+              Morse_Code += '-';
+              Serial.print("- ");
+        }
+         
+}
+
+
+
+
+void DecodeMorse_Code(const String& Morse_Code)                                // this function returns the corresponding ASCII and Hex value of morsecode
+{
+  static char letters[][5] = {".-", "-...", "-.-.", "-..", ".",
+                              "..-.", "--.", "....", "..", ".---",
+                              "-.-", ".-..", "--", "-.", "---",
+                              ".--.", "--.-", ".-.", "...", "-",
+                              "..-", "...-", ".--", "-..-",
+                              "-.--", "--.."};
+  static char letter[26] ={'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
+                            'Q','R','S','T','U','V','W','X','Y','Z'};
+
+  int Error_Flag=0;  
+  Serial.println();                          
+  Serial.print("DECODED Alphabet: ");
+  Serial.print(" ");            
+  for (int i=0; i<26;i++)
+  {
+  
+     if (String(letters[i]) == Morse_Code)
+     {
+         Serial.print( "ASCII: ");
+         Serial.print(letter[i]);
+         angle[j]= i;  
+         j++;    
+         Error_Flag =1;
+         char buffer[6];
+         unsigned char character = letter[i];
+         sprintf(buffer, "%02X", character);
+         Serial.print( " Hex: ");
+         Serial.print(buffer);
+         break; 
+     }
+    
+  }
+  
+  if (Error_Flag==0) 
+  Serial.println("Invalid Morse Code");
+  
+}
+
+
+void print_display(int angle[])                                           //display the hex numbers on 7 segment Led screen
+{
+  static int hex[26][2] = {4,1,4,2,4,3,4,4,4,5,4,6,4,7,4,8,4,9,4,10,4,11,4,12,4,13,4,14,4,15,5,0,5,1,5,2,5,3,5,4,5,5,5,6,5,7,5,8,5,9,5,10};  //Hex code from A to Z 
+  int k=0; 
+  while(k < j)
+  {
+       int z = angle[k];
+
+        words[k][0]= hex [z][0];
+        words[k][1]= hex [z][1];
+      
+       k++;
+      
+     // flagangle = 1;
+   }
+
+for(int q=0; q< j; q++)
+  for (int w=0; w< 2; w++ )
+ {
+   switch(words[q][w]){
+    default:
+    showx(); break;
+    case 0: show0(); break;
+    case 1: show1(); break;
+    case 2: show2(); break;
+    case 3: show3(); break;
+    case 4: show4(); break;
+    case 5: show5(); break;
+    case 6: show6(); break;
+    case 7: show7(); break;
+    case 8: show8(); break;
+    case 9: show9(); break;
+    case 10: showa(); break;
+    case 11: showb(); break;
+    case 12: showc(); break;
+    case 13: showd(); break;
+    case 14: showe(); break;
+    case 15: showf(); break;
+    }
+    delay(500);
+    off_all_leds();
+    delay(100);
+ }
+
+
+   
+  } 
+
+
+//to represent each hex numbers on leds of 7 segment display 
+  
+ void off_all_leds(){
+  digitalWrite(a,LOW);
+  digitalWrite(b,LOW);
+  digitalWrite(c,LOW);
+  digitalWrite(d,LOW);
+  digitalWrite(e,LOW);
+  digitalWrite(f,LOW);
+  digitalWrite(g,LOW);
+}
+  void showa()
+{
+  Serial.println("A");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,LOW);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void showb()
+{
+  Serial.println("B");
+  digitalWrite(a,LOW);
+  digitalWrite(b,LOW);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void showc()
+{
+  Serial.println("C");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,LOW);
+  digitalWrite(c,LOW);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,LOW);
+}
+void showd()
+{
+  Serial.println("D");
+  digitalWrite(a,LOW);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,LOW);
+  digitalWrite(g,HIGH);
+}
+void showe()
+{
+  Serial.println("E");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,LOW);
+  digitalWrite(c,LOW);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void showf()
+{
+  Serial.println("F");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,LOW);//LOW
+  digitalWrite(c,LOW);//LOW
+  digitalWrite(d,LOW);//LOW
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show1()
+{
+  Serial.println("1");
+  digitalWrite(a,LOW);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,LOW);
+  digitalWrite(e,LOW);
+  digitalWrite(f,LOW);
+  digitalWrite(g,LOW);
+}
+void show2()
+{
+  Serial.println("2");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,LOW);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,LOW);
+  digitalWrite(g,HIGH);
+}
+void show3()
+{
+  Serial.println("3");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,LOW);
+  digitalWrite(f,LOW);
+  digitalWrite(g,HIGH);
+}
+void show4()
+{
+  Serial.println("4");
+  digitalWrite(a,LOW);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,LOW);
+  digitalWrite(e,LOW);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show5()
+{
+  Serial.println("5");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,LOW);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,LOW);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show6()
+{
+  Serial.println("6");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,LOW);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show7()
+{
+  Serial.println("7");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,LOW);
+  digitalWrite(e,LOW);
+  digitalWrite(f,LOW);
+  digitalWrite(g,LOW);
+}
+void show8()
+{
+  Serial.println("8");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show9()
+{
+  Serial.println("9");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,LOW);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
+void show0()
+{
+  Serial.println("0");
+  digitalWrite(a,HIGH);
+  digitalWrite(b,HIGH);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,HIGH);
+  digitalWrite(e,HIGH);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,LOW);
+}
+void showx()
+{
+  Serial.println("X");
+  digitalWrite(a,LOW);
+  digitalWrite(b,LOW);
+  digitalWrite(c,HIGH);
+  digitalWrite(d,LOW);
+  digitalWrite(e,LOW);
+  digitalWrite(f,HIGH);
+  digitalWrite(g,HIGH);
+}
